@@ -1,0 +1,207 @@
+---
+title: ""
+author: "James.H"
+date: '2021 12 07 '
+output:
+  html_document: default
+  pdf_document: 
+    latex_engine: xelatex
+---
+
+
+## 1. Introduction  
+
+  The dataset that I'll be working with contains shooting incident data from New York City. It contains information of victims and perpetrators in incidents involving firearms. First we'll look at the structure and overall features of the dataset.
+  
+  
+```{r setup, message = FALSE, warning = FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r, message = FALSE, warning = FALSE}
+library(reticulate)
+library(tidyverse)
+library(lubridate)
+library(dplyr)
+library(magrittr)
+library(naniar)
+
+
+url_in <- "https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD"
+shoot_data <- read_csv(url_in)
+summary(shoot_data)
+```
+
+
+I will take a subset of the above data, taking data only from the year 2020.
+
+
+```{r, include=TRUE}
+reduced_data = read_csv("NYPDshoot_data_2020_ordered.csv")
+summary(reduced_data)
+```
+### 1.1 Setup & sketch-up
+
+The above data is a subset of the original dataset, ordered in ascending order with respect to the incident occurrence date-time. We can see that there are 1948 rows, each with information regarding the latitude-longitude, the victims' and the perpetrators' gender and age group, and some additional location information. 
+  
+  Goal: The tasks I wish to complete with this data are visualization of the data to identify key patterns in shooting incidents. Specifically, the goal is to focus on time, geospatial, and age group properties and their relationship to firearm related crimes in New York City. 
+  
+  Means and characteristics: In order to carry out the tasks, a model will be fit to the data with respect to time to highlight specific time frames of heightened gun-violence activities. To see if there is any significant relationship between age and gun-violence, the data will be represented in an interactive frequency bar chart, each bar representing respective age groups. Finally, the total number of incidents grouped by districts within the city will be represented on an interactive geospatial map. The combination of a simple histogram and interactive visualizations will provide users with intuition and insight into many gun-violence incidents going on in New York City.
+  
+  Target Data: The visualization will require latitude-longitude coordinates, borough, and time data. 
+  
+  Workflow: Firstly, the data will be cleaned and re-organized to smooth the transition from a raw state to refined visualization. Users will be able to identify key aspects of the data in an intuitive way through extracted and summarized data. Visualizations will promote insight at both initial and careful observations.
+  
+  Roles: Emerging statistician (students) in a local weekend-sports community, a medical student, and an experienced product manager familiar with data visualizations and analyses.
+  
+
+
+
+
+  
+### 1.2 Q: Is there a 5th season? SAD... 
+  
+  
+  This analysis is an attempt to verify what is known as Seasonal Affective Disorder (SAD), which, as its name suggests, refers to a form of depression that comes and goes with the season. People with SAD are more likely to show symptoms during the fall and winter seasons, which include feeling sad, gradual loss of interest in usual hobbies, decrease in energy level, and impaired judgment and decision making. Symptoms of summer SAD are similar, with the addition of increased agitation or anxiety. Ultimately, the target question is: Are there any relationships between the time of year and gun-violence rate? The other parameters such as age group and geographic locations will be accompanying details to identify potential contributions to answering this question.
+  
+  The people I would recruit are of some mathematics and medical background, although psychologists/psychiatrists and behavioral scientists would have been more optimal. I will also take a journaling study approach to this question, since an experiment would be difficult to carry out, considering exposure to possibly uncomfortable situations (SAD affects mood in a very negative way, apparently). 
+  
+  As a final process, the criteria to assess the effectiveness of my visualization will be whether the observers have identified any clear patterns or have additional, deeper questions that go beyond the intuition/insight provided by the visualizations. The fact that the participants become curious on a deeper level shows that they perhaps anticipate an underlying relationship that may become clearer with more time, data, and expertise in data analyses and visualization techniques.
+
+
+
+## 2. The investigation
+
+
+  First, we will use the NYPD shooting data from the year 2020 and take a look which age group contributes to the frequency the most.
+  
+```{python load_data, message = FALSE, warning = FALSE, include=TRUE}
+from matplotlib.figure import Figure
+import pandas as pd
+import plotly.express as px
+from ipywidgets import interact, interactive, fixed, interact_manual
+import ipywidgets as widgets
+
+
+
+df = pd.read_csv(r'C:\Users\joonp\Documents\MSDS\Term 4\DTSA 5304 Fundamentals of Data Visualization\NYPDshoot_data_2020_ordered.csv')
+
+test1 = pd.DataFrame(data=[df.PERP_AGE_GROUP.value_counts().index, df.PERP_AGE_GROUP.value_counts().values]).T
+test1 = test1.rename(columns = {0: 'PERP_AGE_GROUP', 1: 'count'})
+
+
+
+fig = px.bar(test1[:5],
+            x='PERP_AGE_GROUP',
+            y='count',
+            color='count',
+            labels={'PERP_AGE_GROUP': "Perpetrator Age Group", 'count':'Number of Incidents'},
+            template='plotly_dark',
+            text='count',
+            color_continuous_scale='Turbo',
+            )
+
+fig.update_layout(xaxis_tickangle=-45,
+                yaxis={'visible': True, 'showticklabels': False, 'showgrid': False},
+                font=dict(size=15),
+                )
+    
+fig.update_traces(showlegend=False)
+
+#fig.show();
+```
+  
+  The user can hover their mouse over each bar and also zoom in/out. A slider was initially included but later taken out because there were only 5 age groups. If a data category with more variety in groups was chosen, a slider can be added to adjust the number of bar graphs displayed.
+  
+  
+  Next, we will see gun-violence concentration at each respective boroughs. Feel free to zoom in and out of the map so get a more detailed view.
+  
+```{python, message = FALSE, warning = FALSE, include = TRUE}
+import csv
+import pandas as pd
+import plotly.express as px
+import matplotlib.pyplot as plt
+from matplotlib import figure
+from matplotlib.figure import Figure
+import pyproj
+
+csv_file = open('NYPDshoot_data_2020_ordered.csv')
+csv_reader = csv.DictReader(csv_file)
+df = pd.read_csv('NYPDshoot_data_2020_ordered.csv')
+#df = geopandas.read_file('NYPDshoot_data_2020_ordered.csv')
+
+test2 = pd.DataFrame(data=[df.BORO.value_counts().index , df.BORO.value_counts().values, df.Latitude, df.Longitude]).T
+test2 = test2.rename(columns={0: "BORO", 1: 'count', 2: 'latitude', 3:'longitude'})
+test2 = test2.fillna(0)
+longitude = []
+latitude = []
+
+for row in csv_reader:
+    longitude.append(float(row['Longitude']))
+    latitude.append(float(row['Latitude']))
+fig1 = px.scatter_mapbox(test2,
+                        lat=latitude,
+                        lon=longitude,
+                        hover_name="BORO",
+                        hover_data=["count"],
+                        color_continuous_scale="Rainbow",
+                        color=test2["count"],
+                        size=test2["count"],
+                        size_max=50,
+                        zoom=9,
+                        height=600,
+                        template='plotly_dark',
+                       )
+fig1 = fig1.update_layout(
+    mapbox_style="carto-darkmatter", margin={"r":0,"t":0,"l":0,"b":0})
+
+fig1 = fig1.show()
+fig1
+```
+  The sizes of each circle represent the number of gun-violence at each borough of NYC. Users can interact with the map by zooming in or hovering the cursor over each region to display the borough name and incident counts.
+
+
+
+  Finally, we will look at the distribution of gun-violence incidents across each month of the year 2020. 
+```{r, include=TRUE}
+occur_data = reduced_data[order(reduced_data$OCCUR_DateTime),]
+occur_data %>%
+  mutate(month = month(OCCUR_DateTime, label = TRUE)) %>%
+  ggplot(aes(x = month)) + geom_bar() + labs(title = "Shooting incidents in NYC by month (2020)", y = "Number of incidents")
+```
+  
+  Here, we see that the number of incidents peaks during the summer months of June - August, decreasing to the sides while showing a slight peak during January. The distribution also resembles that of a normal distribution.
+  
+  Now we will look at the distribution with respect to hours of the day.
+  
+```{r, include=TRUE}
+occur_data %>%
+  mutate(hour = hour(OCCUR_DateTime)) %>%
+  ggplot(aes(x = hour)) + geom_bar() + labs(title = "Shooting incidents in NYC by hour (2020)", y = "Number of incidents")
+```
+  
+  Looking at the plot, the highest number of incidents is recorded at 23:00, falling off before and after until it hits the minimum at 9:00. 
+  
+  
+
+## 3. Analysis
+
+  The monthly occurrence plot concurs with the hypothesis that there is a cyclical pattern in gun-violence in New York City. One could make the assumption that, during the summer months, people are more likely to become agitated and anxious due to the hot, stuffy weather. In a cut-throat, fast-paced environment like that of New York City, it is likely that residents are already pressured from their hectic and competitive daily routines. Another thing to note is the slight peak during January. The months of December and January include major national holidays that call for massive celebrations and social gatherings. These are also days of familial and interpersonal conflicts as not all families and friends have the happiest and brightest memories of one another.
+  
+  However, it must also be noted that each bar represents the sum of incidents at a given time frame (month and hour). The central limit theorem in statistics states that, given enough sets of samples, the mean of each set converges to a normal distribution. The sums of incidents at each time unit plotted on a histogram should display a somewhat normal distribution based on this theorem, so it is too quick to conclude that the SAD is in effect in New York City.
+  
+  The result from the second plot with number of incidents against hour of day is rather intuitive, since crimes tend to happen during the night. Lack of visibility may provide criminals a temporary surge of courage, increasing the likelihood of impulsive behavior.
+  
+
+
+## 4. Reflection
+
+  For the first link that leads to a bar plot with number of incidents vs age group, the participants and I have observed that it would have been more effective to include additional interaction capabilities to provide a more engaging experience. For example, clicking on a desired bar to reveal more details regarding gender proportion, race, and geographical locations would have readers delving deeper into the analysis process, potentially leading to insights and meaningful feedback. 
+  
+  It was also noted that the first two plots were quite basic and the insight gained are not as meaningful. In fact, the results from the visualizations were obtainable upon brief inspection of the data. If I were to gain more contextual knowledge and proficiency in handling the visualization softwares, these are critical feedback and techniques that I must incorporate into my future analyses. 
+  
+  The last two plots were also noted to be too simple, but the most insightful. My medical student participant pointed out that SAD is something that she and her peers joke about at certain times of friendly outbursts. Others also noted that the graph was almost too perfect of a fit for the SAD hypothesis. We all agreed in unison that I should continue with this aspect of the research and try to get more data and possibly experts to look into developing the model (given that it's not been done already). 
+  
+  There were two aspects that I found most difficult about this visualization project. The first is the fact that there were too many combinations/permutations of data variables and interactive components to choose from. The more I thought I came to a decision, the more curious I got about other potential relationships. The second is the coding part, from the little things like tidying up the data so that the number of entries match for all the variables, to the technical things like creating widgets and interactive capabilities where appropriate. 
+  
+  On a final note, as a student of data science, I strongly felt a sense of increased responsibility to go beyond just the curriculums offered by the program. To be specific, lacking knowledge in an area of interest only leads to data "organization" to allow for "easier view". What I mean by this is that having limited knowledge regarding behavioral science and human psychology prevents further, deeper analysis of data and results. To be able to make conclusive results and gain meaningful insight, I feel that diligent research and self-studying is essential, especially so for aspiring data scientists. 
