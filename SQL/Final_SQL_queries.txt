@@ -1,0 +1,75 @@
+------------------------------------------------------------------------------
+
+1. List the top 10 products' ProductName, ProductCode, and number of orders 
+for the products with respect to number of orders, in decreasing order. This is to
+examine the popularity of the models to formulate profitable business strategies.
+
+
+***CODE***
+SELECT DISTINCT p.productcode AS "Product Code", 
+	 	    productname AS "Product Name",
+       	    SUM(o.quantityordered) OVER (PARTITION BY p.productcode) AS "Order Count"	 
+FROM "alanparadise/cm".products p
+JOIN "alanparadise/cm".orderdetails o
+ON p.productcode = o.productcode
+GROUP BY 1, 2, p.productline, o.quantityordered
+ORDER BY 3 DESC
+LIMIT 10;
+
+--------------------------------------------------------------------------------
+
+2. List the total number of orders within each year in descending order. By observing the yearly variance in order
+quantities, we can identify change in consumers' hobbies and overall trend in their spending.
+
+
+***CODE***
+SELECT DISTINCT EXTRACT (YEAR FROM CAST(o.orderdate AS DATE)) AS "Year", 
+				COUNT(o.ordernumber) OVER (PARTITION BY EXTRACT (YEAR FROM CAST(o.orderdate AS DATE))) AS "Year total orders"
+FROM "alanparadise/cm".orders o
+JOIN "alanparadise/cm".orderdetails od
+ON o.ordernumber = od.ordernumber
+ORDER BY 2 DESC;
+
+---------------------------------------------------------------------------------
+
+3. Name the top 5 products that has shown the greatest increase in profit from 2003 to 2004, 
+as well as the profit amount. This allows a closer examination of people's tastes in classic models
+and can further determine the effect that current pop-culture and other variables have on the industry.
+
+
+***CODE***
+WITH year04 AS
+    (SELECT p.productname AS "Product Name",
+            (MAX(MSRP - BuyPrice) * (SUM(quantityordered) OVER (PARTITION BY p.productname))) AS PROFIT_2004,
+            EXTRACT (YEAR FROM CAST(o.orderdate AS DATE)) AS "Year"
+      FROM "alanparadise/cm".products p
+	JOIN "alanparadise/cm".orderdetails od
+	ON p.productcode = od.productcode
+	JOIN "alanparadise/cm".orders o
+	ON o.ordernumber = od.ordernumber
+      WHERE EXTRACT (YEAR FROM CAST(o.orderdate AS DATE)) = 2004
+      GROUP BY 1, od.quantityordered, 3),
+
+    year03 AS
+    (SELECT DISTINCT p.productname AS "Product Name",
+            (MAX(MSRP - BuyPrice) * (SUM(quantityordered) OVER (PARTITION BY p.productname))) AS PROFIT_2003,
+            EXTRACT (YEAR FROM CAST(o.orderdate AS DATE)) AS "Year"
+      FROM "alanparadise/cm".products p
+      JOIN "alanparadise/cm".orderdetails od
+      ON p.productcode = od.productcode
+      JOIN "alanparadise/cm".orders o
+      ON o.ordernumber = od.ordernumber
+      WHERE EXTRACT (YEAR FROM CAST(o.orderdate AS DATE)) = 2003
+	GROUP BY 1, od.quantityordered, 3)
+
+
+SELECT p.productname, productline,
+        SUM(PROFIT_2004 - PROFIT_2003) AS "Profit gained from 2003 - 2004"
+FROM year04
+JOIN year03
+ON year04."Product Name" = year03."Product Name"
+JOIN "alanparadise/cm".products p
+ON p.productname = year04."Product Name"
+GROUP BY 1, 2
+ORDER BY 3 DESC
+LIMIT 5;
