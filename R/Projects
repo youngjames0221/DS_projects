@@ -1,0 +1,5 @@
+#Projects and Assignments done using R software.
+#Simple/multiple linear regression, Binomial/Poisson regression, 
+#General Additive Models (GAM), parameter estimation, feature selection,
+#Pairwise comparisons, power and t-tests, smoothing functions (Loess, Kernel, smoothing splines)
+#Data Analysis on NYPD shooting incident data.
